@@ -5,18 +5,17 @@ Supports:
 - Import positions from IBKR account
 - Portfolio templates (60/40, Tech Heavy, Dividend Income, etc.)
 """
+from __future__ import annotations
 
 import uuid
 import logging
 from datetime import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from portfolio_tracker.core.models.target_portfolio import TargetPortfolio, UserPortfolioHolding
-from portfolio_tracker.core.models.instrument import Instrument
-from portfolio_tracker.gateway.ibkr_client import IBKRClient
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from portfolio_tracker.gateway.ibkr_client import IBKRClient
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +57,9 @@ class PortfolioBuilder:
 
     async def create_portfolio(
         self, session: AsyncSession, name: str, description: str = "", targets: list[dict] | None = None
-    ) -> TargetPortfolio:
+    ):
         """Create a new target portfolio."""
+        from portfolio_tracker.core.models.target_portfolio import TargetPortfolio
         portfolio = TargetPortfolio(
             portfolio_id=str(uuid.uuid4()),
             name=name,
@@ -83,8 +83,10 @@ class PortfolioBuilder:
         name = custom_name or template_name
         return await self.create_portfolio(session, name, f"Based on template: {template_name}", targets)
 
-    async def import_from_ibkr(self, session: AsyncSession, ibkr_client: IBKRClient, name: str = "Imported from IBKR") -> TargetPortfolio:
+    async def import_from_ibkr(self, session: AsyncSession, ibkr_client: IBKRClient, name: str = "Imported from IBKR"):
         """Import current IBKR positions as a new portfolio."""
+        from portfolio_tracker.core.models.target_portfolio import UserPortfolioHolding
+        from portfolio_tracker.core.models.instrument import Instrument
         positions = await ibkr_client.get_portfolio()
         if not positions:
             raise ValueError("No positions found in IBKR account")
@@ -129,8 +131,9 @@ class PortfolioBuilder:
         logger.info(f"Imported {len(holdings)} positions from IBKR")
         return portfolio
 
-    async def update_targets(self, session: AsyncSession, portfolio_id: str, targets: list[dict]) -> TargetPortfolio:
+    async def update_targets(self, session: AsyncSession, portfolio_id: str, targets: list[dict]):
         """Update target allocations for a portfolio."""
+        from portfolio_tracker.core.models.target_portfolio import TargetPortfolio
         portfolio = await session.get(TargetPortfolio, portfolio_id)
         if not portfolio:
             raise ValueError(f"Portfolio {portfolio_id} not found")
@@ -147,8 +150,10 @@ class PortfolioBuilder:
 
     async def add_holding(
         self, session: AsyncSession, portfolio_id: str, symbol: str, quantity: float, avg_cost: float
-    ) -> UserPortfolioHolding:
+    ):
         """Add a holding to a portfolio."""
+        from portfolio_tracker.core.models.target_portfolio import UserPortfolioHolding
+        from portfolio_tracker.core.models.instrument import Instrument
         # Ensure instrument exists
         existing = await session.get(Instrument, symbol.upper())
         if not existing:
@@ -166,6 +171,7 @@ class PortfolioBuilder:
 
     async def remove_holding(self, session: AsyncSession, holding_id: int) -> bool:
         """Remove a holding from a portfolio."""
+        from portfolio_tracker.core.models.target_portfolio import UserPortfolioHolding
         holding = await session.get(UserPortfolioHolding, holding_id)
         if holding:
             await session.delete(holding)
@@ -175,6 +181,8 @@ class PortfolioBuilder:
 
     async def get_portfolio(self, session: AsyncSession, portfolio_id: str) -> dict:
         """Get full portfolio with targets and holdings."""
+        from sqlalchemy import select
+        from portfolio_tracker.core.models.target_portfolio import TargetPortfolio, UserPortfolioHolding
         portfolio = await session.get(TargetPortfolio, portfolio_id)
         if not portfolio:
             raise ValueError(f"Portfolio {portfolio_id} not found")
@@ -190,8 +198,10 @@ class PortfolioBuilder:
             "targets": portfolio.targets,
         }
 
-    async def list_portfolios(self, session: AsyncSession) -> list[TargetPortfolio]:
+    async def list_portfolios(self, session: AsyncSession) -> list:
         """List all target portfolios."""
+        from sqlalchemy import select
+        from portfolio_tracker.core.models.target_portfolio import TargetPortfolio
         result = await session.execute(select(TargetPortfolio))
         return list(result.scalars().all())
 
